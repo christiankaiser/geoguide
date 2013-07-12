@@ -1,0 +1,135 @@
+#!/usr/bin/env python
+
+import os, re, shutil, sys
+from subprocess import call
+
+
+def repl(m):                                                                  
+    return '<a href="javascript:loadUrl(\\\'' + m.group(1) + '\\\');"' + m.group(2) + '</a>'
+
+def replq(m):                                                                  
+    return '<a href=\\"javascript:loadUrl(\'' + m.group(1) + '\');\\"' + m.group(2) + '</a>'
+
+
+def update_videos(destdir, srcdir, platform):
+    """
+    Converts the videos into the proper format if needed,
+    removes unnecessary files in the target directory,
+    and updates the data in the project.
+    """
+    # Read the data for the stops.
+    f = open(destdir +'app/store/Postes.js')
+    postesjs = f.read().strip()
+    f.close()
+    videos = re.findall('["\']([a-zA-Z_0-9]+?)\.mp4["\']', postesjs)
+    if platform == 'android':       # enable remote access for videos on Android
+        for v in videos:
+            postesjs = postesjs.replace(v+'.mp4', 'http://igd.unil.ch/geoguide/lsne/m/resources/proj/'+v+'.mp4')
+            call(['rm', destdir +'resources/proj/'+v+'.mp4'])   # no need for videos in Android
+    f = open(destdir +'app/store/Postes.js', 'w')
+    f.write(postesjs)
+    f.close()
+
+
+def update_links(projdir, platform):
+    """
+    Updates the links in projdir for the provided platform.
+    """
+    # Update all the files in app/store
+    store = projdir + 'app/store/'
+    files = [ f for f in os.listdir(store) if os.path.isfile(os.path.join(store,f)) ]
+    for fname in files:
+        if fname[0] == '.': continue
+        f = open(store + fname)
+        s = f.read()
+        f.close()
+        s = re.sub(r'<a href="(.+?)"(.+?)</a>', repl, s)
+        s = re.sub(r'<a href=\\"(.+?)\\"(.+?)</a>', replq, s)
+        f = open(store + fname, 'w')
+        f.write(s)
+        f.close()
+
+
+def update_js(projdir, platform):
+    """
+    Updates the javascript in projdir for the provided platform.
+    """
+    # update index.html
+    f = open(projdir + 'index.html')
+    html = f.read()
+    f.close()
+    html = html.replace('<!-- %cordova.js% -->', '<script src="cordova.js"></script>')
+    f = open(projdir + 'index.html', 'w')
+    f.write(html)
+    f.close()
+    # copy the appropriate cordova.js file
+    basedir = os.path.realpath(os.path.dirname(__file__) +'/../') + '/'
+    cordovajs = basedir + 'lib/phonegap-2.8.1/lib/'+platform+'/cordova.js'
+    shutil.copyfile(cordovajs, projdir + 'cordova.js')
+
+
+def adapt_platform(projdir, platform):
+    f = open(projdir + 'resources/lib/geoguide.js')
+    js = f.read()
+    f.close()
+    js = js.replace('{--platform--}', platform)
+    f = open(projdir + 'resources/lib/geoguide.js', 'w')
+    f.write(js)
+    f.close()
+    
+
+def migrate(platform):
+    """
+    Migrates the active project to the native platform project and updates
+    the content for compatibility with the respective platform
+    """
+    print "   cleaning up existing files..."
+    basedir = os.path.realpath(os.path.dirname(__file__) +'/../') + '/'
+    srcdir = basedir + 'src/'
+    # get the current project name; it is stored in src/active/resources/data/project
+    f = open(srcdir + 'active/resources/data/project')
+    proj = f.read().strip()
+    f.close()
+    destdir = basedir + 'app/' + platform +'/GeoGuide' + proj.capitalize() + '/'
+    if not os.path.exists(destdir):
+        print "Error. Destination directory '%s' does not exist." % destdir
+        sys.exit(-1)
+    wwwdir = destdir + 'www'
+    if platform == 'android': wwwdir = destdir + 'assets/www'
+    if os.path.exists(wwwdir):
+        call(['rm', '-fr', wwwdir])   # removing existing copy
+    print "   active project is:", proj
+    # TODO: this would be more efficient by using rsync...
+    print "   copying new files..."
+    shutil.copytree(srcdir + 'active', wwwdir)
+    print "   updating links..."
+    update_links(wwwdir+'/', platform)
+    print "   updating javascript..."
+    update_js(wwwdir+'/', platform)
+    print "   updating videos..."
+    update_videos(wwwdir+'/', srcdir+'active/', platform)
+    print "   adapting for platform..."
+    adapt_platform(wwwdir+'/', platform)
+    print "   done."
+
+
+
+def main():
+    USAGE = """USAGE:
+        %s platform project
+        platform    the desired platform to deploy
+                    ios | android
+        """ % sys.argv[0]
+    if len(sys.argv) != 2:
+        print USAGE
+        sys.exit(0)
+    platform = sys.argv[1]
+    if platform not in ['ios', 'android']:
+        print "Error. Platform unknown."
+        print USAGE
+        sys.exit(0)
+    migrate(platform)
+
+
+if __name__ == '__main__':
+    main()

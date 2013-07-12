@@ -1,0 +1,77 @@
+#!/usr/bin/env python
+"""
+Activates a project.
+Needs to archive currently active project in appropriate location,
+and restore the archived project.
+"""
+
+import os, shutil, sys
+from subprocess import call
+
+
+PROJ_DIRS = {
+    'store': 'app/store/',
+    'data': 'resources/data/',
+    'map': 'resources/map/', 
+    'images': 'resources/proj/'
+}
+
+
+def archive(proj, projdir):
+    """
+    Archives the active project to the provided projdir with name proj
+    """
+    print "   archiving current project '%s'..." % proj
+    # TODO: this would be more efficient by using rsync or moving instead of copying...
+    for pdata in PROJ_DIRS:
+        folder = PROJ_DIRS[pdata]
+        if os.path.exists(projdir + proj +'/'+ pdata):
+            call(['rm', '-r', projdir + proj +'/'+ pdata])   # removing existing copy
+        shutil.copytree(projdir + 'active/' + folder, projdir + proj +'/'+ pdata) # archive active copy
+
+
+def restore(proj, projdir):
+    """
+    Restores the provided project to the active directory.
+    """
+    print "   restoring project '%s'..." % proj
+    for pdata in PROJ_DIRS:
+        folder = PROJ_DIRS[pdata]
+        if os.path.exists(projdir + 'active/'+ folder):
+            call(['rm', '-r', projdir + 'active/'+ folder])
+        shutil.copytree(projdir + proj +'/'+ pdata, projdir + 'active/'+ folder)
+
+
+def main():
+    USAGE = """USAGE:
+        %s project
+        project    the desired project to active
+                   Needs to be one of the folders in src
+        """ % sys.argv[0]
+    if len(sys.argv) != 2:
+        print USAGE
+        sys.exit(0)
+    proj = sys.argv[1].strip()
+    if proj == 'active':
+        print "Error. '%s' is not a valid project name." % proj
+        sys.exit(-1)
+    basedir = os.path.realpath(os.path.dirname(__file__) +'/../') + '/'
+    # check current project. abort if it project to be activated.
+    f = open(basedir + 'src/active/resources/data/project')
+    curproj = f.read().strip()
+    f.close()
+    if proj == curproj:
+        print "'%s' is already active." % proj
+        sys.exit(0)
+    # check if project to activate is really available
+    dirs = [ f for f in os.listdir(basedir + 'src/') if os.path.isdir(os.path.join(basedir + 'src/',f)) ]
+    if proj not in dirs:
+        print "Error. Project '%s' does not exist." % proj
+        sys.exit(-1)
+    archive(curproj, basedir + 'src/')
+    restore(proj, basedir + 'src/')
+    print "   done."
+
+
+if __name__ == '__main__':
+    main()

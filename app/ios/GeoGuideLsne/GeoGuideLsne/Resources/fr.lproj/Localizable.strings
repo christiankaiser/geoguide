@@ -1,0 +1,8 @@
+// controller title for Videos
+"Videos title" = "Vidéos";
+// accessibility label for recording button
+"toggle audio recording" = "commencer/terminer l'enregistrement";
+// notification spoken by VoiceOver when timed recording finishes
+"timed recording complete" = "Enregistrement programmée terminée";
+// accessibility hint for display of recorded elapsed time
+"recorded time in minutes and seconds" = "Temps enregistré en minutes et secondes";
